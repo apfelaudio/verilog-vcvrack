@@ -1,0 +1,25 @@
+{
+  "slug": "eurorack-pmod-vcvrack",
+  "name": "eurorack-pmod-vcvrack",
+  "version": "2.0.0",
+  "license": "CERN-OHL-S-2.0",
+  "brand": "vk2.berlin",
+  "author": "Sebastian Holzapfel",
+  "authorEmail": "me@sebholzapfel.com",
+  "authorUrl": "sebholzapfel.com",
+  "pluginUrl": "vk2.berlin",
+  "manualUrl": "",
+  "sourceUrl": "",
+  "donateUrl": "",
+  "changelogUrl": "",
+  "modules": [
+    {
+      "slug": "eurorack-pmod",
+      "name": "eurorack-pmod",
+      "description": "Emulator for FPGA-based multifunction module.",
+      "tags": [
+        "Hardware"
+      ]
+    }
+  ]
+}
