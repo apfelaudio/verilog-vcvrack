@@ -1,6 +1,8 @@
 #include "plugin.hpp"
 
-#include "../rtl-verilated/Vcore.h"
+// Verilator must run and build the verilated RTL before this
+// source file is compiletd
+#include "../build/rtl-verilated/Vcore.h"
 
 
 struct Eurorack_pmod : Module {
