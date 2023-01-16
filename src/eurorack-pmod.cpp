@@ -1,9 +1,10 @@
+#include <limits.h>
+
 #include "plugin.hpp"
 
 // Verilator must run and build the verilated RTL before this
-// source file is compiletd
+// source file is compiled. The Makefile handles this.
 #include "../build/rtl-verilated/Vcore.h"
-
 
 struct Eurorack_pmod : Module {
 	enum ParamId {
@@ -17,21 +18,21 @@ struct Eurorack_pmod : Module {
 		INPUTS_LEN
 	};
 	enum OutputId {
+		OUT0_OUTPUT,
 		OUT1_OUTPUT,
 		OUT2_OUTPUT,
 		OUT3_OUTPUT,
-		OUT0_OUTPUT,
 		OUTPUTS_LEN
 	};
 	enum LightId {
-		LED_IN0_LIGHT,
-		LED_IN1_LIGHT,
-		LED_IN2_LIGHT,
-		LED_IN3_LIGHT,
-		LED_OUT0_LIGHT,
-		LED_OUT1_LIGHT,
-		LED_OUT2_LIGHT,
-		LED_OUT3_LIGHT,
+		ENUMS(LED_IN0_LIGHT, 2),
+		ENUMS(LED_IN1_LIGHT, 2),
+		ENUMS(LED_IN2_LIGHT, 2),
+		ENUMS(LED_IN3_LIGHT, 2),
+		ENUMS(LED_OUT0_LIGHT, 2),
+		ENUMS(LED_OUT1_LIGHT, 2),
+		ENUMS(LED_OUT2_LIGHT, 2),
+		ENUMS(LED_OUT3_LIGHT, 2),
 		LIGHTS_LEN
 	};
 
@@ -51,35 +52,72 @@ struct Eurorack_pmod : Module {
         tb = new Vcore();
 	}
 
-    int16_t volt_to_fpga(float v) {
-        v *= 4e3;
-        if (v >  32e3) v = 32e3;
-        if (v < -32e3) v = -32e3;
+    /* The eurorack-pmod gateware expects 16-bit signed values representing
+     * millivolts in fixed-point 14.2 layout for samples coming in/out. */
+    int16_t volt_to_fp16(float v, uint8_t fractional_bits = 2,
+                         int16_t clamp_hi = SHRT_MAX, int16_t clamp_lo = SHRT_MIN) {
+        v *= 1e3 * (float)(1 << fractional_bits);
+        if (v >= clamp_hi) return clamp_hi;
+        if (v <= clamp_lo) return clamp_lo;
         return uint16_t(v);
     }
 
-    float fpga_to_volt(int16_t b) {
+    float fp16_to_volt(int16_t b, uint8_t fractional_bits = 2) {
         float v = (float)b;
-        v /= 4e3;
+        v /= 1e3 * (float)(1 << fractional_bits);
         return v;
+    }
+
+    float volt_to_led_green(float f) {
+        float brightness = f / 5.0;
+        brightness = ((brightness > 1.0) ? 1.0 : brightness);
+        brightness = ((brightness < 0.0) ? 0.0 : brightness);
+        return brightness;
+    }
+
+    float volt_to_led_red(float f) {
+        float brightness = -f / 5.0;
+        brightness = ((brightness > 1.0) ? 1.0 : brightness);
+        brightness = ((brightness < 0.0) ? 0.0 : brightness);
+        return brightness;
     }
 
 	void process(const ProcessArgs& args) override {
         tb->sample_clk = 0;
         tb->eval();
-        tb->sample_in0 = volt_to_fpga(inputs[IN0_INPUT].getVoltage());
-        tb->sample_in1 = volt_to_fpga(inputs[IN1_INPUT].getVoltage());
-        tb->sample_in2 = volt_to_fpga(inputs[IN2_INPUT].getVoltage());
-        tb->sample_in3 = volt_to_fpga(inputs[IN3_INPUT].getVoltage());
-        outputs[OUT0_OUTPUT].setVoltage(fpga_to_volt(tb->sample_out0));
-        outputs[OUT1_OUTPUT].setVoltage(fpga_to_volt(tb->sample_out1));
-        outputs[OUT2_OUTPUT].setVoltage(fpga_to_volt(tb->sample_out2));
-        outputs[OUT3_OUTPUT].setVoltage(fpga_to_volt(tb->sample_out3));
+
+        int in_ix = 0;
+        for (auto* in : {&tb->sample_in0, &tb->sample_in1,
+                         &tb->sample_in2, &tb->sample_in3}) {
+            *in = volt_to_fp16(inputs[IN0_INPUT+in_ix].getVoltage());
+            lights[LED_IN0_LIGHT + (in_ix*2) + 0].setBrightness(
+                    volt_to_led_green(inputs[IN0_INPUT+in_ix].getVoltage()));
+            lights[LED_IN0_LIGHT + (in_ix*2) + 1].setBrightness(
+                    volt_to_led_red(inputs[IN0_INPUT+in_ix].getVoltage()));
+            ++in_ix;
+        }
+
+        int out_ix = 0;
+        for (auto* out : {&tb->sample_out0, &tb->sample_out1,
+                          &tb->sample_out2, &tb->sample_out3}) {
+            outputs[OUT0_OUTPUT+out_ix].setVoltage(fp16_to_volt(*out));
+            lights[LED_OUT0_LIGHT + (out_ix*2) + 0].setBrightness(
+                    volt_to_led_green(outputs[OUT0_OUTPUT+out_ix].getVoltage()));
+            lights[LED_OUT0_LIGHT + (out_ix*2) + 1].setBrightness(
+                    volt_to_led_red(outputs[OUT0_OUTPUT+out_ix].getVoltage()));
+            ++out_ix;
+        }
+
         tb->sample_clk = 1;
         tb->eval();
 	}
 };
 
+RectangleLight<GreenRedLight> * createRectLight(Eurorack_pmod* module, float pos_x, float pos_y, int light) {
+    auto l = createLight<RectangleLight<GreenRedLight>>(mm2px(Vec(pos_x, pos_y)), module, light);
+    l->box.size = mm2px(Vec(8.0, 1.0));
+    return l;
+}
 
 struct Eurorack_pmodWidget : ModuleWidget {
 	Eurorack_pmodWidget(Eurorack_pmod* module) {
@@ -99,14 +137,14 @@ struct Eurorack_pmodWidget : ModuleWidget {
 		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(9.7, 97.4)), module, Eurorack_pmod::OUT2_OUTPUT));
 		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(9.7, 111.3)), module, Eurorack_pmod::OUT3_OUTPUT));
 
-		addChild(createLight<MediumLight<RedLight>>(mm2px(Vec(9.7, 21.45)), module, Eurorack_pmod::LED_IN0_LIGHT));
-		addChild(createLight<MediumLight<RedLight>>(mm2px(Vec(9.7, 35.27)), module, Eurorack_pmod::LED_IN1_LIGHT));
-		addChild(createLight<MediumLight<RedLight>>(mm2px(Vec(9.7, 48.65)), module, Eurorack_pmod::LED_IN2_LIGHT));
-		addChild(createLight<MediumLight<RedLight>>(mm2px(Vec(9.7, 62.50)), module, Eurorack_pmod::LED_IN3_LIGHT));
-		addChild(createLight<MediumLight<RedLight>>(mm2px(Vec(9.7, 76.53)), module, Eurorack_pmod::LED_OUT0_LIGHT));
-		addChild(createLight<MediumLight<RedLight>>(mm2px(Vec(9.7, 90.35)), module, Eurorack_pmod::LED_OUT1_LIGHT));
-		addChild(createLight<MediumLight<RedLight>>(mm2px(Vec(9.7, 103.77)), module, Eurorack_pmod::LED_OUT2_LIGHT));
-		addChild(createLight<MediumLight<RedLight>>(mm2px(Vec(9.7, 117.65)), module, Eurorack_pmod::LED_OUT3_LIGHT));
+		addChild(createRectLight(module, 5.7, 20.9+13.8*0, Eurorack_pmod::LED_IN0_LIGHT));
+		addChild(createRectLight(module, 5.7, 20.9+13.8*1, Eurorack_pmod::LED_IN1_LIGHT));
+		addChild(createRectLight(module, 5.7, 20.9+13.8*2, Eurorack_pmod::LED_IN2_LIGHT));
+		addChild(createRectLight(module, 5.7, 20.9+13.8*3, Eurorack_pmod::LED_IN3_LIGHT));
+		addChild(createRectLight(module, 5.7, 20.9+13.8*4, Eurorack_pmod::LED_OUT0_LIGHT));
+		addChild(createRectLight(module, 5.7, 20.9+13.8*5, Eurorack_pmod::LED_OUT1_LIGHT));
+		addChild(createRectLight(module, 5.7, 20.9+13.8*6, Eurorack_pmod::LED_OUT2_LIGHT));
+		addChild(createRectLight(module, 5.7, 20.9+13.8*7, Eurorack_pmod::LED_OUT3_LIGHT));
 	}
 };
 
