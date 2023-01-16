@@ -12,6 +12,12 @@ This plugin simulates the panel layout of the [`eurorack-pmod`](https://github.c
 
 # Building and running
 
+If you are using the SDK, make sure you have `RACK_DIR` set:
+
+```
+export RACK_DIR=<Rack SDK folder>
+```
+
 From the root directory of this repository:
 
 ```
