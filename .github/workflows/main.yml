@@ -12,12 +12,11 @@ jobs:
       - run: wget https://vcvrack.com/downloads/Rack-SDK-2.4.1-lin-x64.zip
       - run: unzip Rack-SDK*.zip && rm Rack-SDK*.zip
       - run: make RACK_DIR=`pwd`/Rack-SDK
+      - run: make RACK_DIR=`pwd`/Rack-SDK install
       - uses: actions/upload-artifact@v4
         with:
           name: plugin-lin-x64
-          path: |
-            plugin.so
-            plugin.json
+          path: dist/
 
   macos-build:
     runs-on: macos-latest
@@ -28,9 +27,8 @@ jobs:
       - run: wget https://vcvrack.com/downloads/Rack-SDK-2.4.1-mac-x64.zip
       - run: unzip Rack-SDK*.zip && rm Rack-SDK*.zip
       - run: make RACK_DIR=`pwd`/Rack-SDK
+      - run: make RACK_DIR=`pwd`/Rack-SDK install
       - uses: actions/upload-artifact@v4
         with:
           name: plugin-mac-x64
-          path: |
-            plugin.so
-            plugin.json
+          path: dist/
