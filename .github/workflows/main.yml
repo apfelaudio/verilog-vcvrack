@@ -1,0 +1,36 @@
+name: build
+
+on: [push]
+
+jobs:
+  ubuntu-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: YosysHQ/setup-oss-cad-suite@v3
+      - run: verilator --version
+      - run: wget https://vcvrack.com/downloads/Rack-SDK-2.4.1-lin-x64.zip
+      - run: unzip Rack-SDK*.zip && rm Rack-SDK*.zip
+      - run: make RACK_DIR=`pwd`/Rack-SDK
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plugin-lin-x64
+          path: |
+            plugin.so
+            plugin.json
+
+  macos-build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install verilator
+      - run: verilator --version
+      - run: wget https://vcvrack.com/downloads/Rack-SDK-2.4.1-mac-x64.zip
+      - run: unzip Rack-SDK*.zip && rm Rack-SDK*.zip
+      - run: make RACK_DIR=`pwd`/Rack-SDK
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plugin-mac-x64
+          path: |
+            plugin.so
+            plugin.json
